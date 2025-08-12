@@ -104,9 +104,6 @@ export function HeroScroll() {
                   <Play className="w-6 h-6 text-white" />
                 </button>
               </div>
-
-              {/* Floating accent dot with slight parallax */}
-              <FloatingDot progress={smooth} />
             </motion.div>
           </div>
         </div>
@@ -221,18 +218,6 @@ function ScatterItem({ cfg, progress }: { cfg: ScatterItemConfig; progress: Moti
           />
         </div>
       </div>
-    </motion.div>
-  )
-}
-
-function FloatingDot({ progress }: { progress: MotionValue<number> }) {
-  // Subtle bezier-ish path using separate transforms
-  const dx = useTransform(progress, [0, 0.5, 1], ["0%", "8%", "16%"])
-  const dy = useTransform(progress, [0, 0.5, 1], ["0%", "2%", "-6%"])
-  const op = useTransform(progress, [0, 0.2, 0.9, 1], [0.8, 1, 0.8, 0.5])
-  return (
-    <motion.div style={{ x: dx, y: dy, opacity: op }} className="absolute right-[12%] top-[46%] w-2 h-2 rounded-full">
-      <div className="w-full h-full rounded-full" style={{ backgroundColor: "var(--accent)" }} />
     </motion.div>
   )
 }
