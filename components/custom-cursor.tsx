@@ -44,8 +44,9 @@ export function CustomCursor() {
         ringRef.current.style.transform = `translate(${rx - 16}px, ${ry - 16}px)`
         ringRef.current.style.width = hover ? "36px" : "32px"
         ringRef.current.style.height = hover ? "36px" : "32px"
-        ringRef.current.style.borderColor = down ? "var(--accent)" : "rgba(0,0,0,0.35)"
-        ringRef.current.style.backgroundColor = down ? "rgba(164,22,26,0.06)" : "transparent"
+        ringRef.current.style.boxShadow = hover ? "0 0 0 6px rgba(164,22,26,0.06)" : "0 0 0 4px rgba(164,22,26,0.04)"
+        ringRef.current.style.borderColor = down ? "var(--accent)" : "var(--accent)"
+        ringRef.current.style.backgroundColor = down ? "rgba(164,22,26,0.12)" : "rgba(164,22,26,0.06)"
       }
 
       rafRef.current = requestAnimationFrame(loop)
@@ -88,12 +89,12 @@ export function CustomCursor() {
         <div
           ref={ringRef}
           className="absolute rounded-full border"
-          style={{ width: 32, height: 32, borderColor: "rgba(0,0,0,0.35)" }}
+          style={{ width: 32, height: 32, borderColor: "var(--accent)" }}
         />
         <div
           ref={dotRef}
           className="absolute w-1.5 h-1.5 rounded-full"
-          style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
+          style={{ backgroundColor: "var(--accent)" }}
         />
       </div>
     </>

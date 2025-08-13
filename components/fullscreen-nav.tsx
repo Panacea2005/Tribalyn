@@ -16,9 +16,6 @@ export function FullscreenNav({
   const items = [
     { label: "Home", href: "/" },
     { label: "Try On", href: "/try-on" },
-    { label: "Collections", href: "/collections" },
-    { label: "Sign In", href: "/sign-in" },
-    { label: "Sign Up", href: "/sign-up" },
   ]
   return (
     <AnimatePresence>

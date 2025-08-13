@@ -9,10 +9,7 @@ export function HeroScroll() {
   const ref = useRef<HTMLDivElement>(null)
   const [playerOpen, setPlayerOpen] = useState(false)
   const playerRef = useRef<HTMLVideoElement>(null)
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start start", "end start"],
-  })
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] })
 
   // Smoother progress
   const smooth = useSpring(scrollYProgress, { stiffness: 140, damping: 28, mass: 0.35 })
@@ -24,9 +21,9 @@ export function HeroScroll() {
   const sideY = useTransform(smooth, [0, 1], ["0%", "-6%"])
   const sideRot = useTransform(smooth, [0, 1], [0, -3])
 
-  // Center video spreads to fullscreen
-  const videoScale = useTransform(smooth, [0, 1], [0.5, 1.12])
-  const radius = useTransform(smooth, [0, 0.7, 1], [40, 14, 0])
+  // Center video spreads to fullscreen quickly within first ~35% of scroll
+  const videoScale = useTransform(smooth, [0, 0.35, 1], [0.5, 1.12, 1.12])
+  const radius = useTransform(smooth, [0, 0.35, 1], [40, 0, 0])
   const vignetteAmt = useTransform(smooth, [0, 1], [0.1, 0.28])
   const vignetteBg = useTransform(vignetteAmt, (v) => {
     const v2 = Math.min(1, v + 0.2)
@@ -61,10 +58,10 @@ export function HeroScroll() {
           <div className="absolute left-0 right-0 top-4 md:top-8 text-center px-6 z-[30] pointer-events-none">
             <div className="font-playfair text-neutral-900 text-2xl md:text-2xl tracking-tight leading-tight mb-3">
               <span className="block">Virtual try‑on for Vietnam</span>
-              <span className="block">and 54 ethnic costumes.</span>
+              <span className="block">and world traditional costumes.</span>
             </div>
             <h1 className="font-playfair text-[color:var(--accent)] text-[12vw] md:text-[9vw] leading-[0.9]">VIETNAM</h1>
-            <div className="font-playfair text-neutral-900 text-[7vw] md:text-[5vw] italic text-white/95">&amp; ETHNIC GROUPS</div>
+            <div className="font-playfair text-neutral-900 text-[7vw] md:text-[5vw] italic text-white/95">&amp; WORLD COSTUMES</div>
           </div>
 
           {/* Center video frame spreads to fullscreen */}

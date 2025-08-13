@@ -5,21 +5,71 @@ import { PageLoader } from '@/components/page-loader'
 import { AccentRouteTransition } from '@/components/accent-route-transition'
 
 export const metadata: Metadata = {
-  title: 'Tribalyn — Vietnam\'s Heritage, Virtually',
+  title: {
+    default: "Tribalyn — Virtual Try‑On for Vietnam & World Traditional Costumes",
+    template: "%s | Tribalyn",
+  },
   description:
-    'Try on Vietnam\'s 54 ethnic costumes virtually. Explore curated collections, stories, and culture brought to life.',
+    "Virtually try on Vietnam’s Áo dài and world traditional costumes (Qipao, Hanfu, Dirndl, Lederhosen, Chut Thai, and more). Explore culture through fashion with an elegant, modern experience.",
   applicationName: 'Tribalyn',
   generator: 'Tribalyn',
-  keywords: ['Tribalyn', 'Vietnam heritage', 'virtual try-on', 'ethnic costumes', 'culture', 'fashion'],
+  keywords: [
+    'Tribalyn',
+    'virtual try-on',
+    'Vietnam',
+    'Ao dai',
+    'Áo dài',
+    'world traditional costumes',
+    'Qipao',
+    'Hanfu',
+    'Dirndl',
+    'Lederhosen',
+    'Chut Thai',
+    'culture',
+    'fashion tech',
+  ],
   authors: [{ name: 'Tribalyn' }],
+  category: 'fashion',
+  metadataBase: new URL('https://tribalyn.app'),
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    title: 'Tribalyn — Virtual Try‑On for Vietnam & World Traditional Costumes',
+    description:
+      "Virtually try on Vietnam’s Áo dài and world traditional outfits with realistic drape and layering.",
+    url: 'https://tribalyn.app',
+    siteName: 'Tribalyn',
+    images: [
+      {
+        url: '/home/hero/hero-2.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'Tribalyn Virtual Try‑On',
+      },
+    ],
+    locale: 'en_US',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Tribalyn — Virtual Try‑On for Vietnam & World Traditional Costumes',
+    description:
+      "Try on Áo dài, Qipao, Hanfu, Dirndl, Lederhosen, Chut Thai, and more — instantly.",
+    images: ['/home/hero/hero-2.jpg'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   icons: {
     icon: [
       { url: '/logo.png', type: 'image/png' },
       { url: '/favicon.ico' },
     ],
     apple: [{ url: '/logo.png' }],
+    shortcut: ['/favicon.ico'],
   },
-  metadataBase: new URL('https://tribalyn.app'),
 }
 
 const inter = Inter({

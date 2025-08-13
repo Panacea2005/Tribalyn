@@ -2,57 +2,29 @@
 
 import type React from "react"
 
-import { useEffect, useRef, useState, useMemo } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import {
-  Camera,
-  ImageDown,
-  Images,
-  MonitorUp,
-  RotateCw,
-  Scan,
-  SlidersHorizontal,
-  Contrast,
-  Sun,
-  Droplets,
-  Palette,
-  Wand2,
-  Layers,
-  FlipHorizontal2,
-  FlipVertical2,
-  MoveHorizontal,
-  MoveVertical,
-  ZoomIn,
-  Share2,
-  Download,
-  Search,
-  Grid,
-  Eye,
-  EyeOff,
-  RefreshCw,
-  ChevronUp,
-  ChevronDown,
-  X,
-} from "lucide-react"
+import { Camera, ImageDown, Images, MonitorUp, RotateCw, FlipHorizontal2, MoveHorizontal, MoveVertical, ZoomIn, Grid, Eye, EyeOff, RefreshCw } from "lucide-react"
 import { CustomCursor } from "@/components/custom-cursor"
 
 type Mode = "selfie" | "upload" | "sample"
 
-type Tribe = { name: string; items: number }
-const tribes: Tribe[] = [
-  { name: "Kinh", items: 8 },
-  { name: "H’Mông", items: 7 },
-  { name: "Tày", items: 6 },
-  { name: "Ê Đê", items: 5 },
-  { name: "Chăm", items: 6 },
-  { name: "Dao", items: 4 },
+type Country = { name: string; items: number }
+const countries: Country[] = [
+  { name: "Vietnam", items: 2 },
+  { name: "China", items: 2 },
+  { name: "Germany", items: 2 },
+  { name: "Thailand", items: 2 },
+  { name: "Italy", items: 2 },
+  { name: "Taiwan", items: 2 },
+  { name: "Portugal", items: 2 },
 ]
 
 const samples = [
-  "/placeholder.svg?height=1600&width=1200",
-  "/placeholder.svg?height=1600&width=1200",
-  "/placeholder.svg?height=1600&width=1200",
+  "/logo.png",
+  "/logo.png",
+  "/logo.png",
 ]
 
 export default function TryOnPage() {
@@ -66,7 +38,7 @@ export default function TryOnPage() {
   }, [])
 
   const [mode, setMode] = useState<Mode>("selfie")
-  const [selectedSample, setSelectedSample] = useState<string>(samples[0])
+  const [selectedSample, setSelectedSample] = useState<string | null>(null)
   const [uploaded, setUploaded] = useState<string | null>(null)
   const [mirrored, setMirrored] = useState(true)
   const [gridOn, setGridOn] = useState(false)
@@ -80,43 +52,23 @@ export default function TryOnPage() {
   const [exposure, setExposure] = useState(50) // brightness
   const [saturation, setSaturation] = useState(60)
 
-  // Library
-  const [query, setQuery] = useState("")
-  const filteredTribes = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return tribes
-    return tribes.filter((t) => t.name.toLowerCase().includes(q))
-  }, [query])
-
-  // Multi-select costumes by tribe, with simple layer list
+  // Multi-select outfits by country (simplified to 2 each)
   const [selectedCostumes, setSelectedCostumes] = useState<
     { id: string; tribe: string; idx: number; label: string; visible: boolean }[]
   >([])
 
-  function toggleCostume(tribe: Tribe, idx: number) {
-    const id = `${tribe.name}-${idx}`
+  function toggleCostume(country: Country, idx: number) {
+    const id = `${country.name}-${idx}`
     setSelectedCostumes((prev) => {
       const exists = prev.find((c) => c.id === id)
       if (exists) {
         return prev.filter((c) => c.id !== id)
       }
-      return [...prev, { id, tribe: tribe.name, idx, label: `${tribe.name} #${idx + 1}`, visible: true }]
+      return [...prev, { id, tribe: country.name, idx, label: `${country.name} #${idx + 1}`, visible: true }]
     })
   }
 
-  function moveLayer(id: string, dir: "up" | "down") {
-    setSelectedCostumes((prev) => {
-      const i = prev.findIndex((c) => c.id === id)
-      if (i === -1) return prev
-      const next = prev.slice()
-      const swapWith = dir === "up" ? i - 1 : i + 1
-      if (swapWith < 0 || swapWith >= next.length) return prev
-      const temp = next[i]
-      next[i] = next[swapWith]
-      next[swapWith] = temp
-      return next
-    })
-  }
+  // Layer reordering removed for simplified experience
 
   // Camera
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -166,7 +118,7 @@ export default function TryOnPage() {
     }
   }, [mode])
 
-  const displayImage = uploaded || selectedSample
+  const displayImage = uploaded || selectedSample || null
   const scale = 0.5 + (scalePct / 100) * 1.5 // ~0.5..2.0
   const tx = (moveX - 50) * 6 // px
   const ty = (moveY - 50) * 6 // px
@@ -185,40 +137,30 @@ export default function TryOnPage() {
           <Link href="/" aria-label="Tribalyn home" className="inline-block mb-4">
             <Image src="/logo.png" alt="Tribalyn" width={160} height={40} className="h-10 w-auto" />
           </Link>
-          <h2 className="font-[var(--font-serif)] text-2xl mb-3">Wardrobe</h2>
-          <div className="relative mb-4">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search tribe…"
-              className="w-full h-10 pl-9 pr-3 rounded-full border bg-white/70 font-[var(--font-sans)] text-sm"
-            />
-          </div>
-
+          <h2 className="font-[var(--font-serif)] text-2xl mb-3">Countries</h2>
           <div className="space-y-6">
-            {filteredTribes.map((t) => (
-              <div key={t.name} className="border rounded-lg overflow-hidden">
+            {countries.map((c) => (
+              <div key={c.name} className="border rounded-lg overflow-hidden">
                 <div className="px-3 py-2 flex items-center justify-between bg-white">
-                  <div className="font-[var(--font-serif)]">{t.name}</div>
-                  <div className="text-xs font-[var(--font-sans)] text-neutral-500">{t.items} pieces</div>
+                  <div className="font-[var(--font-serif)]">{c.name}</div>
+                  <div className="text-xs font-[var(--font-sans)] text-neutral-500">2 outfits</div>
                 </div>
-                <div className="px-3 py-3 grid grid-cols-3 gap-3 bg-neutral-50/60">
-                  {Array.from({ length: t.items }).map((_, i) => {
-                    const id = `${t.name}-${i}`
-                    const active = selectedCostumes.some((c) => c.id === id)
+                <div className="px-3 py-3 grid grid-cols-2 gap-3 bg-neutral-50/60">
+                  {Array.from({ length: 2 }).map((_, i) => {
+                    const id = `${c.name}-${i}`
+                    const active = selectedCostumes.some((x) => x.id === id)
                     return (
                       <button
                         key={i}
-                        onClick={() => toggleCostume(t, i)}
+                        onClick={() => toggleCostume(c, i)}
                         className={`relative aspect-square rounded-md overflow-hidden border ${
                           active ? "ring-2 ring-[color:var(--accent)]" : ""
                         }`}
-                        title={`${t.name} #${i + 1}`}
+                        title={`${c.name} #${i + 1}`}
                       >
                         <Image
                           src="/placeholder.svg?height=300&width=300"
-                          alt={`${t.name} garment ${i + 1}`}
+                          alt={`${c.name} outfit ${i + 1}`}
                           fill
                           className="object-cover"
                         />
@@ -234,19 +176,19 @@ export default function TryOnPage() {
           </div>
         </aside>
 
-        {/* Center: Stage */}
-        <section className="relative bg-neutral-50 grid place-items-center">
+        {/* Center: Stage (full-bleed) */}
+        <section className="relative bg-neutral-50">
           <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,rgba(164,22,26,0.06),transparent_60%)]" />
 
-          {/* Viewport-fit stage (never too long) */}
-          <div className="relative w-[90%] max-w-[980px] h-[78svh] bg-white rounded-xl shadow-2xl overflow-hidden border">
+          {/* Full canvas */}
+          <div className="absolute inset-0 overflow-hidden">
             {/* Before (compare) layer */}
-            {compare && (
+            {compare && (mode === "selfie" || !!displayImage) && (
               <div className="absolute inset-0" style={{ clipPath: "inset(0 50% 0 0)" }}>
                 {mode === "selfie" ? (
                   <video ref={beforeVideoRef} className="w-full h-full object-cover" playsInline muted />
                 ) : (
-                  <Image src={displayImage || "/placeholder.svg?height=1400&width=1000"} alt="Before" fill className="object-cover" />
+                  <Image src={displayImage || "/logo.png"} alt="Before" fill className="object-cover" />
                 )}
               </div>
             )}
@@ -266,14 +208,14 @@ export default function TryOnPage() {
                   playsInline
                   muted
                 />
-              ) : (
+              ) : displayImage ? (
                 <Image
-                  src={displayImage || "/placeholder.svg?height=1400&width=1000"}
+                  src={displayImage}
                   alt="Preview"
                   fill
                   className={`object-cover transition-transform ${mirrored ? "scale-x-[-1]" : ""}`}
                 />
-              )}
+              ) : null}
             </div>
             {compare && <div className="absolute left-1/2 top-0 bottom-0 w-px bg-black/30" />}
 
@@ -281,6 +223,18 @@ export default function TryOnPage() {
             {gridOn && (
               <div className="absolute inset-0 pointer-events-none opacity-60">
                 <GridOverlay />
+              </div>
+            )}
+
+            {/* Placeholder holder for upload/sample with no image */}
+            {((mode === "upload" && !uploaded) || (mode === "sample" && !selectedSample)) && (
+              <div className="absolute inset-0 grid place-items-center">
+                <div className="flex flex-col items-center gap-3">
+                  <img src="/logo.png" alt="Tribalyn" className="h-14 w-auto opacity-90" />
+                  <div className="text-sm font-[var(--font-sans)] text-neutral-600">
+                    {mode === "upload" ? "Choose an image to begin" : "Pick a sample to preview"}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -321,9 +275,9 @@ export default function TryOnPage() {
               </ModeButton>
             </div>
 
-            {/* Upload and Samples */}
+            {/* Upload and Samples (centered) */}
             {mode === "upload" && (
-              <label className="absolute right-3 bottom-3 inline-flex items-center gap-2 rounded-full border px-4 py-2 bg-white/85 backdrop-blur cursor-pointer">
+              <label className="absolute left-1/2 bottom-4 -translate-x-1/2 inline-flex items-center gap-2 rounded-full border px-4 py-2 bg-white/90 backdrop-blur cursor-pointer shadow-sm">
                 <MonitorUp className="w-4 h-4" />
                 <span className="font-[var(--font-sans)] text-sm">Choose image…</span>
                 <input
@@ -342,7 +296,7 @@ export default function TryOnPage() {
             )}
 
             {mode === "sample" && (
-              <div className="absolute right-3 bottom-3 flex gap-2 bg-white/85 backdrop-blur p-2 rounded-full">
+              <div className="absolute left-1/2 bottom-4 -translate-x-1/2 flex gap-2 bg-white/90 backdrop-blur p-2 rounded-full shadow-sm">
                 {samples.map((s) => (
                   <button
                     key={s}
@@ -352,7 +306,7 @@ export default function TryOnPage() {
                     onClick={() => setSelectedSample(s)}
                   >
                     <Image
-                      src={s || "/placeholder.svg"}
+                      src={s || "/logo.png"}
                       alt="Sample"
                       width={160}
                       height={160}
@@ -373,85 +327,22 @@ export default function TryOnPage() {
             </button>
           </div>
 
-          {/* Bottom tray: quick actions */}
-          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-white/85 backdrop-blur rounded-full border px-3 py-2 flex items-center gap-2">
-            <button className="h-9 px-3 rounded-full border text-sm font-[var(--font-sans)] hover:bg-black/5">
-              Snapshot
-            </button>
-            <button className="h-9 px-3 rounded-full border text-sm font-[var(--font-sans)] hover:bg-black/5">
-              Undo
-            </button>
-            <button className="h-9 px-3 rounded-full border text-sm font-[var(--font-sans)] hover:bg-black/5">
-              Redo
-            </button>
-            <button className="h-9 px-3 rounded-full border text-sm font-[var(--font-sans)] hover:bg-black/5">
-              Share
-            </button>
-          </div>
+          {/* Bottom tray removed per simplification */}
         </section>
 
-        {/* Right: Pro Controls */}
+        {/* Right: Simplified Controls */}
         <aside className="h-full border-l bg-white/70 backdrop-blur px-4 lg:px-5 py-6 overflow-y-auto">
           <h2 className="font-[var(--font-serif)] text-2xl mb-4">Controls</h2>
 
-          {/* Layers manager */}
-          <Section title="Layers" icon={<Layers className="w-4 h-4" />}>
-            {selectedCostumes.length === 0 ? (
-              <div className="text-xs text-neutral-500 font-[var(--font-sans)]">No garments selected yet.</div>
-            ) : (
-              <div className="space-y-2">
-                {selectedCostumes.map((c) => (
-                  <div
-                    key={c.id}
-                    className="flex items-center justify-between gap-2 border rounded-md px-2 py-1.5 bg-white"
-                  >
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          setSelectedCostumes((prev) =>
-                            prev.map((x) => (x.id === c.id ? { ...x, visible: !x.visible } : x)),
-                          )
-                        }
-                        className="w-8 h-8 grid place-items-center rounded-md border hover:bg-black/5"
-                        title={c.visible ? "Hide" : "Show"}
-                      >
-                        {c.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                      </button>
-                      <div className="font-[var(--font-sans)] text-sm">{c.label}</div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => moveLayer(c.id, "up")}
-                        className="w-8 h-8 grid place-items-center rounded-md border hover:bg-black/5"
-                        title="Move up"
-                      >
-                        <ChevronUp className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => moveLayer(c.id, "down")}
-                        className="w-8 h-8 grid place-items-center rounded-md border hover:bg-black/5"
-                        title="Move down"
-                      >
-                        <ChevronDown className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setSelectedCostumes((prev) => prev.filter((x) => x.id !== c.id))}
-                        className="w-8 h-8 grid place-items-center rounded-md border hover:bg-black/5"
-                        title="Remove"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Section>
-
-          <Section title="Fit & Alignment" icon={<Scan className="w-4 h-4" />}>
+          <Section title="Fit & Alignment">
             <div className="grid grid-cols-2 gap-2 mb-1">
-              <ActionButton icon={<Wand2 className="w-4 h-4" />} onClick={() => { setScalePct(100); setRotateDeg(0); setMoveX(50); setMoveY(50) }}>AI Fit</ActionButton>
-              <ActionButton icon={<RefreshCw className="w-4 h-4" />} onClick={() => { setScalePct(70); setRotateDeg(0); setMoveX(50); setMoveY(50); setExposure(50); setSaturation(60) }}>Reset All</ActionButton>
+              <ActionButton icon={<RefreshCw className="w-4 h-4" />} onClick={() => { setScalePct(70); setRotateDeg(0); setMoveX(50); setMoveY(50); setExposure(50); setSaturation(60) }}>Reset</ActionButton>
+              <ToggleLabeled
+                label={gridOn ? "Hide Grid" : "Show Grid"}
+                icon={<Grid className="w-4 h-4" />}
+                active={gridOn}
+                onClick={() => setGridOn((g) => !g)}
+              />
             </div>
             <SliderLabeled id="scale" label="Scale" icon={<ZoomIn className="w-4 h-4" />} value={scalePct} onChange={setScalePct} />
             <SliderLabeled
@@ -465,58 +356,17 @@ export default function TryOnPage() {
             />
             <SliderLabeled id="x" label="Move X" icon={<MoveHorizontal className="w-4 h-4" />} value={moveX} onChange={setMoveX} />
             <SliderLabeled id="y" label="Move Y" icon={<MoveVertical className="w-4 h-4" />} value={moveY} onChange={setMoveY} />
-            <div className="grid grid-cols-2 gap-2">
-              <ToggleLabeled
-                label="Flip H"
-                icon={<FlipHorizontal2 className="w-4 h-4" />}
-                active={mirrored}
-                onClick={() => setMirrored((m) => !m)}
-              />
-              <ToggleLabeled label="Flip V" icon={<FlipVertical2 className="w-4 h-4" />} />
-            </div>
             <ToggleLabeled
-              label={gridOn ? "Hide Grid" : "Show Grid"}
-              icon={<Grid className="w-4 h-4" />}
-              active={gridOn}
-              onClick={() => setGridOn((g) => !g)}
+              label="Flip H"
+              icon={<FlipHorizontal2 className="w-4 h-4" />}
+              active={mirrored}
+              onClick={() => setMirrored((m) => !m)}
             />
           </Section>
 
-          <Section title="Masking" icon={<Layers className="w-4 h-4" />}>
-            <ToggleLabeled label="Remove Background" icon={<Wand2 className="w-4 h-4" />} />
-            <SliderLabeled id="feather" label="Edge Feather" defaultValue={30} />
-            <SliderLabeled id="smooth" label="Smoothness" defaultValue={40} />
-          </Section>
-
-          <Section title="Color & Tone" icon={<Palette className="w-4 h-4" />}>
-            <SliderLabeled id="exposure" label="Exposure" icon={<Sun className="w-4 h-4" />} value={exposure} onChange={setExposure} />
-            <SliderLabeled
-              id="temperature"
-              label="Temperature"
-              icon={<Contrast className="w-4 h-4" />}
-              defaultValue={50}
-            />
-            <SliderLabeled id="tint" label="Tint" icon={<Droplets className="w-4 h-4" />} defaultValue={50} />
-            <SliderLabeled id="saturation" label="Saturation" icon={<SlidersHorizontal className="w-4 h-4" />} value={saturation} onChange={setSaturation} />
-            <SliderLabeled id="vibrance" label="Vibrance" defaultValue={50} />
-          </Section>
-
-          <Section title="Output" icon={<Share2 className="w-4 h-4" />}>
-            <div className="grid grid-cols-2 gap-2">
-              <ActionButton icon={<Download className="w-4 h-4" />}>Export PNG</ActionButton>
-              <ActionButton icon={<Download className="w-4 h-4" />}>Export JPG</ActionButton>
-            </div>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {["720p", "1080p", "4K"].map((r) => (
-                <button key={r} className="h-9 rounded-full border text-sm font-[var(--font-sans)] hover:bg-black/5">
-                  {r}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <ToggleLabeled label="Transparent BG" />
-              <ToggleLabeled label="Watermark" />
-            </div>
+          <Section title="Adjustments">
+            <SliderLabeled id="exposure" label="Exposure" value={exposure} onChange={setExposure} />
+            <SliderLabeled id="saturation" label="Saturation" value={saturation} onChange={setSaturation} />
           </Section>
         </aside>
       </div>

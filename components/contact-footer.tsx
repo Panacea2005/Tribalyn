@@ -10,7 +10,9 @@ export function ContactFooter() {
           Contact <span className="italic text-[color:var(--accent)]">with</span> Tribalyn
         </div>
         <div className="mt-8 text-[color:var(--accent)] font-[var(--font-sans)] text-xl">
-          <Link href="mailto:hello@tribalyn.app">hello@tribalyn.app</Link>
+          <span> · </span>
+          <Link href="https://tribalyn.vercel.app" target="_blank" className="underline underline-offset-4">tribalyn.vercel.app</Link>
+          <span> · </span>
         </div>
 
         <div className="mt-6 text-sm text-neutral-600 font-[var(--font-sans)]">
@@ -28,9 +30,9 @@ export function ContactFooter() {
         </div>
 
         <div className="mt-14 grid gap-2 text-neutral-700 font-[var(--font-sans)]">
-          <div>Offices in Hà Nội and Hồ Chí Minh City</div>
-          <div className="text-xs tracking-widest uppercase text-[color:var(--accent)]">Headquarter Office</div>
-          <div>123 Heritage Lane, District 1, HCMC · +84 123 456 789</div>
+          <div>Based in Ho Chi Minh City, Vietnam</div>
+          <div className="text-xs tracking-widest uppercase text-[color:var(--accent)]">Address</div>
+          <div>A35 Bach Dang Street, Ward 2, Tan Binh District, Ho Chi Minh City 730000</div>
         </div>
 
         <div className="mt-12 border-t border-neutral-200" />

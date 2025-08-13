@@ -61,17 +61,6 @@ export function Header({ transparent = false }: { transparent?: boolean }) {
             >
               Try On
             </Link>
-            <Link
-              href="/collections"
-              aria-current={pathname === "/collections" ? "page" : undefined}
-              className={`font-playfair transition-colors ${
-                pathname?.startsWith("/collections")
-                  ? "text-[color:var(--accent)] underline underline-offset-8 decoration-2"
-                  : "hover:text-[color:var(--accent)]"
-              }`}
-            >
-              Collections
-            </Link>
           </nav>
 
           {/* Center brand: image logo */}
@@ -81,31 +70,8 @@ export function Header({ transparent = false }: { transparent?: boolean }) {
             </Link>
           </div>
 
-          {/* Right nav */}
-          <nav className="flex justify-end items-center gap-6 text-sm">
-            <Link
-              href="/sign-in"
-              aria-current={pathname === "/sign-in" ? "page" : undefined}
-              className={`font-playfair transition-colors ${
-                pathname?.startsWith("/sign-in")
-                  ? "text-[color:var(--accent)] underline underline-offset-8 decoration-2"
-                  : "hover:text-[color:var(--accent)]"
-              }`}
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/sign-up"
-              aria-current={pathname === "/sign-up" ? "page" : undefined}
-              className={`inline-flex items-center h-9 px-4 rounded-full border transition-colors font-playfair ${
-                pathname?.startsWith("/sign-up")
-                  ? "border-[color:var(--accent)] bg-[color:var(--accent)] text-white underline underline-offset-8 decoration-2"
-                  : "border-[color:var(--accent)] text-[color:var(--accent)] hover:bg-[color:var(--accent)] hover:text-white"
-              }`}
-            >
-              Sign Up
-            </Link>
-          </nav>
+          {/* Right nav (empty placeholder to keep layout symmetrical) */}
+          <nav className="flex justify-end items-center gap-6 text-sm" />
         </div>
       </header>
 
