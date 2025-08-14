@@ -5,10 +5,11 @@ import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Camera, ImageDown, Images, MonitorUp, RotateCw, FlipHorizontal2, MoveHorizontal, MoveVertical, ZoomIn, Grid, Eye, EyeOff, RefreshCw } from "lucide-react"
+import { Camera, ImageDown, MonitorUp, FlipHorizontal2, Grid, Eye, EyeOff, RefreshCw, RotateCw, MoveHorizontal, MoveVertical, ZoomIn } from "lucide-react"
+import { generateTryOn } from "@/lib/api"
 import { CustomCursor } from "@/components/custom-cursor"
 
-type Mode = "selfie" | "upload" | "sample"
+type Mode = "selfie" | "upload"
 
 type Country = { name: string; items: number }
 const countries: Country[] = [
@@ -21,10 +22,42 @@ const countries: Country[] = [
   { name: "Portugal", items: 2 },
 ]
 
+// Outfit thumbnails per country (two each). Replace with your real clothing images as needed.
+const countryOutfits: Record<string, string[]> = {
+  Vietnam: [
+    "/try-on/vietnam-1.jpg",
+    "/try-on/vietnam-2.jpg",
+  ],
+  China: [
+    "/try-on/china-1.jpg",
+    "/try-on/china-2.jpg",
+  ],
+  Germany: [
+    "/try-on/germany-1.jpg",
+    "/try-on/germany-2.jpg",
+  ],
+  Thailand: [
+    "/try-on/thailand-1.jpg",
+    "/try-on/thailand-2.jpg",
+  ],
+  Italy: [
+    "/try-on/italy-1.jpg",
+    "/try-on/italy-2.jpg",
+  ],
+  Taiwan: [
+    "/try-on/taiwan-1.jpg",
+    "/try-on/taiwan-2.jpg",
+  ],
+  Portugal: [
+    "/try-on/portugal-1.jpg",
+    "/try-on/portugal-2.jpg",
+  ],
+}
+
 const samples = [
-  "/logo.png",
-  "/logo.png",
-  "/logo.png",
+  "/try-on/samples/1.jpg",
+  "/try-on/samples/2.jpg",
+  "/try-on/samples/3.jpg",
 ]
 
 export default function TryOnPage() {
@@ -37,12 +70,15 @@ export default function TryOnPage() {
     }
   }, [])
 
-  const [mode, setMode] = useState<Mode>("selfie")
-  const [selectedSample, setSelectedSample] = useState<string | null>(null)
+  const [mode, setMode] = useState<Mode>("upload")
+  // No separate sample mode; samples appear within Upload as quick picks
   const [uploaded, setUploaded] = useState<string | null>(null)
   const [mirrored, setMirrored] = useState(true)
   const [gridOn, setGridOn] = useState(false)
-  const [compare, setCompare] = useState(false)
+  const [viewMode, setViewMode] = useState<"original" | "result" | "compare">("original")
+  const [comparePct, setComparePct] = useState(50)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const [originalStillUrl, setOriginalStillUrl] = useState<string | null>(null)
   // Transform controls
   const [scalePct, setScalePct] = useState(70)
   const [rotateDeg, setRotateDeg] = useState(0)
@@ -51,20 +87,27 @@ export default function TryOnPage() {
   // Basic image adjustments
   const [exposure, setExposure] = useState(50) // brightness
   const [saturation, setSaturation] = useState(60)
+  const [vibrance, setVibrance] = useState(50)
+  // Backend results
+  const [resultB64, setResultB64] = useState<string | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [bgChoice, setBgChoice] = useState<string | null>(null)
+  const [uploadedBg, setUploadedBg] = useState<File | null>(null)
+  const [avatarPrompt, setAvatarPrompt] = useState("")
+  const [backgroundPrompt, setBackgroundPrompt] = useState("")
 
-  // Multi-select outfits by country (simplified to 2 each)
-  const [selectedCostumes, setSelectedCostumes] = useState<
-    { id: string; tribe: string; idx: number; label: string; visible: boolean }[]
-  >([])
+  // Single selected clothing outfit
+  const [selectedClothing, setSelectedClothing] = useState<
+    { id: string; tribe: string; idx: number; label: string; image: string } | null
+  >(null)
 
   function toggleCostume(country: Country, idx: number) {
     const id = `${country.name}-${idx}`
-    setSelectedCostumes((prev) => {
-      const exists = prev.find((c) => c.id === id)
-      if (exists) {
-        return prev.filter((c) => c.id !== id)
-      }
-      return [...prev, { id, tribe: country.name, idx, label: `${country.name} #${idx + 1}`, visible: true }]
+    setSelectedClothing((prev) => {
+      if (prev && prev.id === id) return null
+      const images = countryOutfits[country.name] || []
+      const image = images[idx] || images[0] || "/logo.png"
+      return { id, tribe: country.name, idx, label: `${country.name} #${idx + 1}`, image }
     })
   }
 
@@ -118,11 +161,54 @@ export default function TryOnPage() {
     }
   }, [mode])
 
-  const displayImage = uploaded || selectedSample || null
+  const displayImage = uploaded || null
+  const afterImage = resultB64 ? `data:image/png;base64,${resultB64}` : null
+  const hasAvatarImage = mode === "selfie" || (mode === "upload" && !!uploaded)
+  const hasAvatarPrompt = !!avatarPrompt && avatarPrompt.trim().length > 0
+  const hasAvatar = hasAvatarImage || hasAvatarPrompt
+  const hasBackgroundImage = !!uploadedBg || !!bgChoice
+  const hasBackgroundPrompt = !!backgroundPrompt && backgroundPrompt.trim().length > 0
+  const hasBackground = hasBackgroundImage || hasBackgroundPrompt
   const scale = 0.5 + (scalePct / 100) * 1.5 // ~0.5..2.0
   const tx = (moveX - 50) * 6 // px
   const ty = (moveY - 50) * 6 // px
-  const filterCss = `brightness(${exposure / 50}) saturate(${saturation / 50})`
+  const vibranceFactor = 1 + (vibrance - 50) / 100
+  const filterCss = `brightness(${exposure / 50}) saturate(${(saturation / 50) * vibranceFactor}) contrast(${vibranceFactor})`
+
+  // Helpers to convert sources to File for API
+  async function urlToFile(url: string): Promise<File> {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    const name = url.split("/").pop() || "image.jpg"
+    return new File([blob], name, { type: blob.type || "image/jpeg" })
+  }
+
+  async function placeholderToFile(url: string): Promise<File> {
+    return urlToFile(url)
+  }
+
+  async function urlOrVideoToFile(url: string): Promise<File> {
+    // If it's a blob URL from upload, fetch it; otherwise fetch static asset
+    return urlToFile(url)
+  }
+
+  async function captureSelfieToFile(): Promise<File> {
+    const video = videoRef.current
+    if (!video) throw new Error("Camera not ready")
+    const width = video.videoWidth || 1280
+    const height = video.videoHeight || 720
+    const canvas = document.createElement("canvas")
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext("2d")!
+    if (mirrored) {
+      ctx.translate(width, 0)
+      ctx.scale(-1, 1)
+    }
+    ctx.drawImage(video, 0, 0, width, height)
+    const blob: Blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b as Blob), "image/jpeg", 0.92)!)
+    return new File([blob], "selfie.jpg", { type: "image/jpeg" })
+  }
 
   return (
     <main className="h-screen w-screen overflow-hidden bg-white">
@@ -148,7 +234,8 @@ export default function TryOnPage() {
                 <div className="px-3 py-3 grid grid-cols-2 gap-3 bg-neutral-50/60">
                   {Array.from({ length: 2 }).map((_, i) => {
                     const id = `${c.name}-${i}`
-                    const active = selectedCostumes.some((x) => x.id === id)
+                    const active = selectedClothing?.id === id
+                    const imgSrc = (countryOutfits[c.name] && countryOutfits[c.name][i]) || (countryOutfits[c.name] && countryOutfits[c.name][0]) || "/logo.png"
                     return (
                       <button
                         key={i}
@@ -159,7 +246,7 @@ export default function TryOnPage() {
                         title={`${c.name} #${i + 1}`}
                       >
                         <Image
-                          src="/placeholder.svg?height=300&width=300"
+                          src={imgSrc}
                           alt={`${c.name} outfit ${i + 1}`}
                           fill
                           className="object-cover"
@@ -181,43 +268,116 @@ export default function TryOnPage() {
           <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,rgba(164,22,26,0.06),transparent_60%)]" />
 
           {/* Full canvas */}
-          <div className="absolute inset-0 overflow-hidden">
+          <div ref={stageRef} className="absolute inset-0 overflow-hidden select-none">
             {/* Before (compare) layer */}
-            {compare && (mode === "selfie" || !!displayImage) && (
-              <div className="absolute inset-0" style={{ clipPath: "inset(0 50% 0 0)" }}>
-                {mode === "selfie" ? (
-                  <video ref={beforeVideoRef} className="w-full h-full object-cover" playsInline muted />
-                ) : (
-                  <Image src={displayImage || "/logo.png"} alt="Before" fill className="object-cover" />
-                )}
+            {viewMode === "compare" && afterImage && (
+              <div
+                className="absolute inset-0 z-20 pointer-events-none"
+              >
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    transform: `translate(${tx}px, ${ty}px) scale(${scale}) rotate(${rotateDeg}deg)`,
+                    transformOrigin: "center center",
+                    filter: filterCss,
+                  }}
+                >
+                  {/* Left: original */}
+                  <div className="absolute inset-0" style={{ clipPath: `inset(0 ${100 - comparePct}% 0 0)` }}>
+                    {originalStillUrl ? (
+                      <Image src={originalStillUrl} alt="Original" fill className="object-contain" />
+                    ) : mode === "selfie" ? (
+                      <video ref={beforeVideoRef} className="w-full h-full object-contain" playsInline muted />
+                    ) : (
+                      <Image src={displayImage || "/logo.png"} alt="Original" fill className="object-contain" />
+                    )}
+                  </div>
+                  {/* Right: result */}
+                  <div className="absolute inset-0" style={{ clipPath: `inset(0 0 0 ${comparePct}%)` }}>
+                    <Image src={afterImage} alt="Result" fill className="object-contain" />
+                  </div>
+                </div>
+                {/* Divider and handle */}
+                <div
+                  className="absolute top-0 bottom-0 w-[2px] bg-white/95 shadow-[0_0_0_1px_rgba(0,0,0,0.2)] pointer-events-none"
+                  style={{ left: `${comparePct}%`, transform: "translateX(-1px)" }}
+                />
+                <div
+                  role="slider"
+                  aria-label="Drag to compare"
+                  className="absolute top-1/2 -translate-y-1/2 -ml-4 h-10 w-10 rounded-full border bg-white shadow grid place-items-center cursor-ew-resize pointer-events-auto"
+                  style={{ left: `${comparePct}%` }}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    const start = stageRef.current
+                    if (!start) return
+                    const onMove = (ev: MouseEvent) => {
+                      const rect = start.getBoundingClientRect()
+                      const pct = Math.min(100, Math.max(0, ((ev.clientX - rect.left) / rect.width) * 100))
+                      setComparePct(pct)
+                    }
+                    const onUp = () => {
+                      window.removeEventListener("mousemove", onMove)
+                      window.removeEventListener("mouseup", onUp)
+                    }
+                    window.addEventListener("mousemove", onMove)
+                    window.addEventListener("mouseup", onUp)
+                  }}
+                  onTouchStart={(e) => {
+                    const start = stageRef.current
+                    if (!start) return
+                    const onMove = (ev: TouchEvent) => {
+                      const rect = start.getBoundingClientRect()
+                      const x = ev.touches[0]?.clientX ?? 0
+                      const pct = Math.min(100, Math.max(0, ((x - rect.left) / rect.width) * 100))
+                      setComparePct(pct)
+                    }
+                    const onEnd = () => {
+                      window.removeEventListener("touchmove", onMove)
+                      window.removeEventListener("touchend", onEnd)
+                      window.removeEventListener("touchcancel", onEnd)
+                    }
+                    window.addEventListener("touchmove", onMove)
+                    window.addEventListener("touchend", onEnd)
+                    window.addEventListener("touchcancel", onEnd)
+                  }}
+                >
+                  <span className="h-3 w-3 rounded-full bg-[color:var(--accent)]" />
+                </div>
               </div>
             )}
             {/* Transformed main layer */}
             <div
-              className="absolute inset-0"
+              className="absolute inset-0 z-10"
               style={{
                 transform: `translate(${tx}px, ${ty}px) scale(${scale}) rotate(${rotateDeg}deg)`,
                 transformOrigin: "center center",
                 filter: filterCss,
               }}
             >
-              {mode === "selfie" ? (
+              {viewMode !== "compare" && (mode === "selfie" ? (
                 <video
                   ref={videoRef}
-                  className={`w-full h-full object-cover transition-transform ${mirrored ? "scale-x-[-1]" : ""}`}
+                  className={`w-full h-full object-contain transition-transform ${mirrored ? "scale-x-[-1]" : ""}`}
                   playsInline
                   muted
                 />
-              ) : displayImage ? (
+              ) : viewMode === "result" && afterImage ? (
+                <Image
+                  src={afterImage}
+                  alt="Preview"
+                  fill
+                  className={`object-contain transition-transform ${mirrored ? "scale-x-[-1]" : ""}`}
+                />
+              ) : viewMode !== "result" && displayImage ? (
                 <Image
                   src={displayImage}
                   alt="Preview"
                   fill
-                  className={`object-cover transition-transform ${mirrored ? "scale-x-[-1]" : ""}`}
+                  className={`object-contain transition-transform ${mirrored ? "scale-x-[-1]" : ""}`}
                 />
-              ) : null}
+              ) : null)}
             </div>
-            {compare && <div className="absolute left-1/2 top-0 bottom-0 w-px bg-black/30" />}
 
             {/* Optional grid for alignment */}
             {gridOn && (
@@ -226,9 +386,9 @@ export default function TryOnPage() {
               </div>
             )}
 
-            {/* Placeholder holder for upload/sample with no image */}
-            {((mode === "upload" && !uploaded) || (mode === "sample" && !selectedSample)) && (
-              <div className="absolute inset-0 grid place-items-center">
+            {/* Placeholder holder only when there is truly no content */}
+            {!afterImage && !displayImage && mode !== "selfie" && (
+              <div className="absolute inset-0 grid place-items-center z-0 pointer-events-none">
                 <div className="flex flex-col items-center gap-3">
                   <img src="/logo.png" alt="Tribalyn" className="h-14 w-auto opacity-90" />
                   <div className="text-sm font-[var(--font-sans)] text-neutral-600">
@@ -238,20 +398,15 @@ export default function TryOnPage() {
               </div>
             )}
 
-            {/* Selected tokens */}
+            {/* Selected clothing token */}
+            {selectedClothing && (
             <div className="absolute left-4 top-4 right-4 flex flex-wrap gap-2 pointer-events-none">
-              {selectedCostumes.map((c) => (
-                <span
-                  key={c.id}
-                  className="px-2 py-1 rounded-full bg-black/55 text-white text-xs font-[var(--font-sans)]"
-                >
-                  {c.label}
-                </span>
-              ))}
+                <span className="px-2 py-1 rounded-full bg-black/55 text-white text-xs font-[var(--font-sans)]">{selectedClothing.label}</span>
             </div>
+            )}
 
             {/* In-canvas toolbar */}
-            <div className="absolute right-3 top-3 flex gap-2">
+            <div className="absolute right-3 top-3 flex gap-2 z-30">
               <ModeButton
                 icon={<Camera className="w-4 h-4" />}
                 active={mode === "selfie"}
@@ -266,24 +421,34 @@ export default function TryOnPage() {
               >
                 Upload
               </ModeButton>
-              <ModeButton
-                icon={<Images className="w-4 h-4" />}
-                active={mode === "sample"}
-                onClick={() => setMode("sample")}
-              >
-                Samples
-              </ModeButton>
             </div>
 
             {/* Upload and Samples (centered) */}
+            {mode === "selfie" && (
+              <button
+                onClick={async () => {
+                  try {
+                    const file = await captureSelfieToFile()
+                    const url = URL.createObjectURL(file)
+                    setUploaded(url)
+                    setOriginalStillUrl(url)
+                    setMode("upload")
+                  } catch {}
+                }}
+                className="absolute left-1/2 bottom-4 -translate-x-1/2 h-10 px-4 rounded-full border bg-white/90 backdrop-blur text-sm font-[var(--font-sans)] z-30"
+              >
+                Capture Selfie
+              </button>
+            )}
             {mode === "upload" && (
-              <label className="absolute left-1/2 bottom-4 -translate-x-1/2 inline-flex items-center gap-2 rounded-full border px-4 py-2 bg-white/90 backdrop-blur cursor-pointer shadow-sm">
+              <label className={`absolute left-1/2 bottom-20 -translate-x-1/2 inline-flex items-center gap-2 rounded-full border px-4 py-2 bg-white/90 backdrop-blur shadow-sm z-30 ${hasAvatarPrompt ? "opacity-50" : "cursor-pointer"}`}>
                 <MonitorUp className="w-4 h-4" />
                 <span className="font-[var(--font-sans)] text-sm">Choose image…</span>
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
+                  disabled={hasAvatarPrompt}
                   onChange={(e) => {
                     const f = e.target.files?.[0]
                     if (!f) return
@@ -294,16 +459,19 @@ export default function TryOnPage() {
                 />
               </label>
             )}
-
-            {mode === "sample" && (
-              <div className="absolute left-1/2 bottom-4 -translate-x-1/2 flex gap-2 bg-white/90 backdrop-blur p-2 rounded-full shadow-sm">
+            {mode === "upload" && (
+              <div className={`absolute left-1/2 bottom-4 -translate-x-1/2 flex gap-2 bg-white/90 backdrop-blur p-2 rounded-full shadow-sm z-30 ${hasAvatarPrompt ? "opacity-50 pointer-events-none" : ""}`}>
                 {samples.map((s) => (
                   <button
                     key={s}
                     className={`w-12 h-12 rounded-lg overflow-hidden border ${
-                      selectedSample === s ? "ring-2 ring-[color:var(--accent)]" : ""
+                      uploaded === s ? "ring-2 ring-[color:var(--accent)]" : ""
                     }`}
-                    onClick={() => setSelectedSample(s)}
+                    onClick={() => {
+                      if (hasAvatarPrompt) return
+                      setUploaded(s)
+                      setMode("upload")
+                    }}
                   >
                     <Image
                       src={s || "/logo.png"}
@@ -318,13 +486,17 @@ export default function TryOnPage() {
             )}
 
             {/* Compare overlay toggle */}
-            <button
-              onClick={() => setCompare((c) => !c)}
-              className="absolute left-3 top-3 inline-flex items-center gap-2 h-9 px-3 rounded-full border bg-white/85 font-[var(--font-sans)] text-sm"
-            >
-              {compare ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            <div className="absolute left-3 top-3 flex gap-2 z-30">
+              <ModeButton icon={<Eye className="w-4 h-4" />} active={viewMode === "original"} onClick={() => setViewMode("original")}>Original</ModeButton>
+              <ModeButton icon={<Eye className="w-4 h-4" />} active={viewMode === "result"} onClick={() => afterImage && setViewMode("result")}>
+                Result
+              </ModeButton>
+              <ModeButton icon={<Eye className="w-4 h-4" />} active={viewMode === "compare"} onClick={() => afterImage && setViewMode("compare")}>
               Compare
-            </button>
+              </ModeButton>
+          </div>
+
+            {/* Generate button moved to right panel */}
           </div>
 
           {/* Bottom tray removed per simplification */}
@@ -343,7 +515,50 @@ export default function TryOnPage() {
                 active={gridOn}
                 onClick={() => setGridOn((g) => !g)}
               />
+                    </div>
+            <ToggleLabeled
+              label="Flip H"
+              icon={<FlipHorizontal2 className="w-4 h-4" />}
+              active={mirrored}
+              onClick={() => setMirrored((m) => !m)}
+            />
+          </Section>
+
+          <Section title="Background">
+            <div className={`grid grid-cols-3 gap-2 ${hasBackgroundPrompt ? "opacity-50 pointer-events-none" : ""}`}>
+              {["/try-on/backgrounds/1.jpg", "/try-on/backgrounds/2.jpg", "/try-on/backgrounds/3.jpg", "/try-on/backgrounds/4.jpg"].map((src) => (
+                <button key={src} className={`relative aspect-[4/3] rounded-md overflow-hidden border ${bgChoice === src ? "ring-2 ring-[color:var(--accent)]" : ""}`} onClick={() => setBgChoice((s) => (s === src ? null : src))}>
+                  <Image src={src} alt="Background" fill className="object-cover" />
+                      </button>
+                ))}
+              </div>
+            <label className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 bg-white/80 ${hasBackgroundPrompt ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}>
+              <MonitorUp className="w-4 h-4" />
+              <span className="text-sm font-[var(--font-sans)]">Upload background…</span>
+              <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                const f = e.target.files?.[0]
+                if (!f) return
+                setUploadedBg(f)
+                const url = URL.createObjectURL(f)
+                setBgChoice(url)
+              }} />
+            </label>
+          </Section>
+
+          <Section title="Prompts (optional)">
+            <div className="grid gap-2">
+              <div>
+                <label className="block text-xs text-neutral-600 font-[var(--font-sans)] mb-1">Avatar prompt</label>
+                <textarea value={avatarPrompt} onChange={(e) => setAvatarPrompt(e.target.value)} disabled={hasAvatarImage} className="w-full min-h-[72px] rounded-md border p-2 text-sm font-[var(--font-sans)] disabled:opacity-50" placeholder="Describe the avatar if not uploading (e.g., 'young woman, smiling, front-facing')" />
+              </div>
+              <div>
+                <label className="block text-xs text-neutral-600 font-[var(--font-sans)] mb-1">Background prompt</label>
+                <textarea value={backgroundPrompt} onChange={(e) => setBackgroundPrompt(e.target.value)} disabled={hasBackgroundImage} className="w-full min-h-[72px] rounded-md border p-2 text-sm font-[var(--font-sans)] disabled:opacity-50" placeholder="Describe the background (e.g., 'studio white backdrop, soft light')" />
+              </div>
             </div>
+          </Section>
+
+          <Section title="Fit & Alignment (Detailed)">
             <SliderLabeled id="scale" label="Scale" icon={<ZoomIn className="w-4 h-4" />} value={scalePct} onChange={setScalePct} />
             <SliderLabeled
               id="rotate"
@@ -356,18 +571,53 @@ export default function TryOnPage() {
             />
             <SliderLabeled id="x" label="Move X" icon={<MoveHorizontal className="w-4 h-4" />} value={moveX} onChange={setMoveX} />
             <SliderLabeled id="y" label="Move Y" icon={<MoveVertical className="w-4 h-4" />} value={moveY} onChange={setMoveY} />
-            <ToggleLabeled
-              label="Flip H"
-              icon={<FlipHorizontal2 className="w-4 h-4" />}
-              active={mirrored}
-              onClick={() => setMirrored((m) => !m)}
-            />
+            <SliderLabeled id="vibrance" label="Vibrance" value={vibrance} onChange={setVibrance} />
           </Section>
 
-          <Section title="Adjustments">
-            <SliderLabeled id="exposure" label="Exposure" value={exposure} onChange={setExposure} />
-            <SliderLabeled id="saturation" label="Saturation" value={saturation} onChange={setSaturation} />
-          </Section>
+          <div className="mt-6 border-t pt-4">
+            <button
+              onClick={async () => {
+                if (!selectedClothing) return
+                try {
+                  setIsGenerating(true)
+                  let avatarFile: File | null = null
+                  if (mode === "selfie") {
+                    avatarFile = await captureSelfieToFile()
+                    const still = URL.createObjectURL(avatarFile)
+                    setOriginalStillUrl(still)
+                  } else if (mode === "upload" && uploaded) {
+                    avatarFile = await urlOrVideoToFile(uploaded)
+                    setOriginalStillUrl(uploaded)
+                  } else if (false) {
+                    // no sample mode
+                  } else if (avatarPrompt.trim().length > 0) {
+                    avatarFile = null
+                  }
+                  const clothingFile = await urlToFile(selectedClothing.image)
+                  const backgroundFile = uploadedBg ? uploadedBg : bgChoice ? await urlToFile(bgChoice) : null
+                  const res = await generateTryOn({
+                    avatar: avatarFile ?? undefined,
+                    clothing: clothingFile,
+                    background: backgroundFile,
+                    options: {
+                      ...(!hasAvatarImage && avatarPrompt ? { avatar_prompt: avatarPrompt } : {}),
+                      ...(!hasBackgroundImage && backgroundPrompt ? { background_prompt: backgroundPrompt } : {}),
+                    },
+                  })
+                  setResultB64(res.imageBase64 ?? null)
+                  setViewMode("result")
+                } catch (e) {
+                  console.warn("Generate failed", e)
+                } finally {
+                  setIsGenerating(false)
+                }
+              }}
+              className="w-full h-11 rounded-full border bg-[color:var(--accent)] text-white font-[var(--font-sans)] disabled:opacity-60"
+              disabled={isGenerating || !selectedClothing || !hasAvatar}
+            >
+              {isGenerating ? "Generating…" : "Generate Try‑On"}
+                </button>
+            </div>
         </aside>
       </div>
     </main>
