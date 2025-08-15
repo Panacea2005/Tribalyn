@@ -5,7 +5,8 @@ import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Camera, ImageDown, MonitorUp, FlipHorizontal2, Grid, Eye, EyeOff, RefreshCw, RotateCw, MoveHorizontal, MoveVertical, ZoomIn } from "lucide-react"
+import { Camera, ImageDown, MonitorUp, FlipHorizontal2, Grid, Eye, EyeOff, RefreshCw, RotateCw, MoveHorizontal, MoveVertical, ZoomIn, User } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
 import { generateTryOn } from "@/lib/api"
 import { CustomCursor } from "@/components/custom-cursor"
 
@@ -29,7 +30,7 @@ const countryOutfits: Record<string, string[]> = {
     "/try-on/vietnam-2.jpg",
   ],
   China: [
-    "/try-on/china-1.jpg",
+    "/try-on/china-1.png",
     "/try-on/china-2.jpg",
   ],
   Germany: [
@@ -213,6 +214,116 @@ export default function TryOnPage() {
   return (
     <main className="h-screen w-screen overflow-hidden bg-white">
       <CustomCursor />
+      
+      {/* Generating Animation Overlay */}
+      <AnimatePresence>
+        {isGenerating && (
+          <motion.div
+            key="generating-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-[100] grid place-items-center backdrop-blur-md bg-white/80"
+          >
+            <div className="relative w-[260px] h-[260px] grid place-items-center">
+              {/* Logo */}
+              <img src="/logo.png" alt="Tribalyn" className="h-20 w-auto" />
+
+              {/* Progress rings */}
+              <svg
+                className="absolute inset-0 m-auto rotate-[-90deg]"
+                width={260}
+                height={260}
+                viewBox="0 0 260 260"
+                aria-hidden
+              >
+                {/* Outer track */}
+                <circle
+                  cx="130"
+                  cy="130"
+                  r="52"
+                  fill="none"
+                  stroke="rgba(0,0,0,0.1)"
+                  strokeWidth="3"
+                />
+                {/* Inner track */}
+                <circle
+                  cx="130"
+                  cy="130"
+                  r="44"
+                  fill="none"
+                  stroke="rgba(0,0,0,0.08)"
+                  strokeWidth="3"
+                />
+                {/* Outer white progress (counter‑clockwise) */}
+                <motion.circle
+                  cx="130"
+                  cy="130"
+                  r="52"
+                  fill="none"
+                  stroke="#000000"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 52}
+                  strokeDashoffset={2 * Math.PI * 52}
+                  transform="matrix(-1 0 0 1 260 0)"
+                  animate={{ strokeDashoffset: 0 }}
+                  transition={{ 
+                    strokeDashoffset: { 
+                      duration: 2, 
+                      ease: "easeInOut",
+                      repeat: Infinity,
+                      repeatType: "loop"
+                    } 
+                  }}
+                />
+                {/* Inner accent progress */}
+                <motion.circle
+                  cx="130"
+                  cy="130"
+                  r="44"
+                  fill="none"
+                  stroke="var(--accent)"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray={2 * Math.PI * 44}
+                  strokeDashoffset={2 * Math.PI * 44}
+                  animate={{ strokeDashoffset: 0 }}
+                  transition={{ 
+                    strokeDashoffset: { 
+                      duration: 1.5, 
+                      ease: "easeInOut",
+                      repeat: Infinity,
+                      repeatType: "loop"
+                    } 
+                  }}
+                />
+              </svg>
+            </div>
+            
+            {/* Generating text */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-center">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="text-lg font-[var(--font-serif)] text-neutral-800 mb-2"
+              >
+                Generating Try-On
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="text-sm font-[var(--font-sans)] text-neutral-600"
+              >
+                This may take a few moments...
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Note: Brand logo is shown inside the left sidebar */}
 
@@ -441,14 +552,13 @@ export default function TryOnPage() {
               </button>
             )}
             {mode === "upload" && (
-              <label className={`absolute left-1/2 bottom-20 -translate-x-1/2 inline-flex items-center gap-2 rounded-full border px-4 py-2 bg-white/90 backdrop-blur shadow-sm z-30 ${hasAvatarPrompt ? "opacity-50" : "cursor-pointer"}`}>
+              <label className="absolute left-1/2 bottom-20 -translate-x-1/2 inline-flex items-center gap-2 rounded-full border px-4 py-2 bg-white/90 backdrop-blur shadow-sm z-30 cursor-pointer">
                 <MonitorUp className="w-4 h-4" />
                 <span className="font-[var(--font-sans)] text-sm">Choose image…</span>
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  disabled={hasAvatarPrompt}
                   onChange={(e) => {
                     const f = e.target.files?.[0]
                     if (!f) return
@@ -460,7 +570,7 @@ export default function TryOnPage() {
               </label>
             )}
             {mode === "upload" && (
-              <div className={`absolute left-1/2 bottom-4 -translate-x-1/2 flex gap-2 bg-white/90 backdrop-blur p-2 rounded-full shadow-sm z-30 ${hasAvatarPrompt ? "opacity-50 pointer-events-none" : ""}`}>
+              <div className="absolute left-1/2 bottom-4 -translate-x-1/2 flex gap-2 bg-white/90 backdrop-blur p-2 rounded-full shadow-sm z-30">
                 {samples.map((s) => (
                   <button
                     key={s}
@@ -468,7 +578,6 @@ export default function TryOnPage() {
                       uploaded === s ? "ring-2 ring-[color:var(--accent)]" : ""
                     }`}
                     onClick={() => {
-                      if (hasAvatarPrompt) return
                       setUploaded(s)
                       setMode("upload")
                     }}
@@ -525,14 +634,14 @@ export default function TryOnPage() {
           </Section>
 
           <Section title="Background">
-            <div className={`grid grid-cols-3 gap-2 ${hasBackgroundPrompt ? "opacity-50 pointer-events-none" : ""}`}>
+            <div className="grid grid-cols-3 gap-2">
               {["/try-on/backgrounds/1.jpg", "/try-on/backgrounds/2.jpg", "/try-on/backgrounds/3.jpg", "/try-on/backgrounds/4.jpg"].map((src) => (
                 <button key={src} className={`relative aspect-[4/3] rounded-md overflow-hidden border ${bgChoice === src ? "ring-2 ring-[color:var(--accent)]" : ""}`} onClick={() => setBgChoice((s) => (s === src ? null : src))}>
                   <Image src={src} alt="Background" fill className="object-cover" />
                       </button>
                 ))}
               </div>
-            <label className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 bg-white/80 ${hasBackgroundPrompt ? "opacity-50 pointer-events-none" : "cursor-pointer"}`}>
+            <label className="mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 bg-white/80 cursor-pointer">
               <MonitorUp className="w-4 h-4" />
               <span className="text-sm font-[var(--font-sans)]">Upload background…</span>
               <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
@@ -549,11 +658,11 @@ export default function TryOnPage() {
             <div className="grid gap-2">
               <div>
                 <label className="block text-xs text-neutral-600 font-[var(--font-sans)] mb-1">Avatar prompt</label>
-                <textarea value={avatarPrompt} onChange={(e) => setAvatarPrompt(e.target.value)} disabled={hasAvatarImage} className="w-full min-h-[72px] rounded-md border p-2 text-sm font-[var(--font-sans)] disabled:opacity-50" placeholder="Describe the avatar if not uploading (e.g., 'young woman, smiling, front-facing')" />
+                <textarea value={avatarPrompt} onChange={(e) => setAvatarPrompt(e.target.value)} className="w-full min-h-[72px] rounded-md border p-2 text-sm font-[var(--font-sans)]" placeholder="Describe the avatar (e.g., 'young woman, smiling, front-facing')" />
               </div>
               <div>
                 <label className="block text-xs text-neutral-600 font-[var(--font-sans)] mb-1">Background prompt</label>
-                <textarea value={backgroundPrompt} onChange={(e) => setBackgroundPrompt(e.target.value)} disabled={hasBackgroundImage} className="w-full min-h-[72px] rounded-md border p-2 text-sm font-[var(--font-sans)] disabled:opacity-50" placeholder="Describe the background (e.g., 'studio white backdrop, soft light')" />
+                <textarea value={backgroundPrompt} onChange={(e) => setBackgroundPrompt(e.target.value)} className="w-full min-h-[72px] rounded-md border p-2 text-sm font-[var(--font-sans)]" placeholder="Describe the background (e.g., 'studio white backdrop, soft light')" />
               </div>
             </div>
           </Section>
@@ -600,8 +709,8 @@ export default function TryOnPage() {
                     clothing: clothingFile,
                     background: backgroundFile,
                     options: {
-                      ...(!hasAvatarImage && avatarPrompt ? { avatar_prompt: avatarPrompt } : {}),
-                      ...(!hasBackgroundImage && backgroundPrompt ? { background_prompt: backgroundPrompt } : {}),
+                      ...(avatarPrompt ? { avatar_prompt: avatarPrompt } : {}),
+                      ...(backgroundPrompt ? { background_prompt: backgroundPrompt } : {}),
                     },
                   })
                   setResultB64(res.imageBase64 ?? null)
