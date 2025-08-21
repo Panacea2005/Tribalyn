@@ -67,8 +67,53 @@ const femaleSamples = [
   "/try-on/samples/6.jpg",
   "/try-on/samples/7.jpg",
   "/try-on/samples/8.jpg",
-  "/try-on/samples/9.jpg",
 ]
+
+// Background images grouped by country
+const backgroundsByCountry: Record<string, string[]> = {
+  China: [
+    "/try-on/backgrounds/China_1.png",
+    "/try-on/backgrounds/China_2.jpg",
+    "/try-on/backgrounds/China_3.jpg",
+    "/try-on/backgrounds/China_4.jpg",
+  ],
+  Germany: [
+    "/try-on/backgrounds/Germany_1.jpg",
+    "/try-on/backgrounds/Germany_2.jpg",
+  ],
+  Italy: [
+    "/try-on/backgrounds/Italy_1.jpg",
+    "/try-on/backgrounds/Italy_2.jpg",
+    "/try-on/backgrounds/Italy_3.jpg",
+    "/try-on/backgrounds/Italy_4.jpg",
+  ],
+  Portugal: [
+    "/try-on/backgrounds/Portugal_1.jpg",
+    "/try-on/backgrounds/Portugal_2.jpg",
+    "/try-on/backgrounds/Portugal_3.jpg",
+    "/try-on/backgrounds/Portugal_4.jpg",
+    "/try-on/backgrounds/Portugal_5.jpg",
+  ],
+  Taiwan: [
+    "/try-on/backgrounds/Taiwan_1.jpg",
+    "/try-on/backgrounds/Taiwan_2.jpg",
+    "/try-on/backgrounds/Taiwan_3.jpg",
+    "/try-on/backgrounds/Taiwan_4.jpg",
+  ],
+  Thailand: [
+    "/try-on/backgrounds/Thailand_1.jpg",
+    "/try-on/backgrounds/Thailand_2.jpg",
+    "/try-on/backgrounds/Thailand_3.jpg",
+    "/try-on/backgrounds/Thailand_4.jpg",
+    "/try-on/backgrounds/Thailand_5.jpg",
+  ],
+  Vietnam: [
+    "/try-on/backgrounds/Vietnam_1.jpg",
+    "/try-on/backgrounds/Vietnam_2.jpg",
+    "/try-on/backgrounds/Vietnam_3.jpg",
+    "/try-on/backgrounds/Vietnam_4.jpg",
+  ],
+}
 
 export default function TryOnPage() {
   // Page is fixed; only inner panes scroll
@@ -106,6 +151,8 @@ export default function TryOnPage() {
   const [avatarPrompt, setAvatarPrompt] = useState("")
   const [backgroundPrompt, setBackgroundPrompt] = useState("")
   const [showSampleLibrary, setShowSampleLibrary] = useState(false)
+  const [showBackgroundLibrary, setShowBackgroundLibrary] = useState(false)
+  const [backgroundCountry, setBackgroundCountry] = useState<string>("All")
 
   // Single selected clothing outfit
   const [selectedClothing, setSelectedClothing] = useState<
@@ -813,24 +860,30 @@ export default function TryOnPage() {
           </Section>
 
           <Section title="Background">
-            <div className="grid grid-cols-3 gap-2">
-              {["/try-on/backgrounds/1.jpg", "/try-on/backgrounds/2.jpg", "/try-on/backgrounds/3.jpg", "/try-on/backgrounds/4.jpg"].map((src) => (
-                <button key={src} className={`relative aspect-[4/3] rounded-md overflow-hidden border ${bgChoice === src ? "ring-2 ring-[color:var(--accent)]" : ""}`} onClick={() => setBgChoice((s) => (s === src ? null : src))}>
-                  <Image src={src} alt="Background" fill className="object-cover" />
-                      </button>
-                ))}
+            <div className="space-y-2">
+              {bgChoice ? (
+                <div className="relative w-full aspect-[4/3] rounded-md overflow-hidden border">
+                  <Image src={bgChoice} alt="Selected background" fill className="object-cover" />
+                </div>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <ActionButton icon={<ImageDown className="w-4 h-4" />} onClick={() => setShowBackgroundLibrary(true)}>
+                  Library
+                </ActionButton>
+                <label className="h-9 px-3 rounded-full border text-sm font-[var(--font-sans)] inline-flex items-center gap-2 hover:bg-black/5 cursor-pointer">
+                  <MonitorUp className="w-4 h-4" />
+                  <span>Upload</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const f = e.target.files?.[0]
+                    if (!f) return
+                    setUploadedBg(f)
+                    const url = URL.createObjectURL(f)
+                    setBgChoice(url)
+                  }} />
+                </label>
               </div>
-            <label className="mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 bg-white/80 cursor-pointer">
-              <MonitorUp className="w-4 h-4" />
-              <span className="text-sm font-[var(--font-sans)]">Upload background…</span>
-              <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                const f = e.target.files?.[0]
-                if (!f) return
-                setUploadedBg(f)
-                const url = URL.createObjectURL(f)
-                setBgChoice(url)
-              }} />
-            </label>
+            </div>
+            {/* moved modal to root level */}
           </Section>
 
           <Section title="Prompts (optional)">
@@ -924,6 +977,68 @@ export default function TryOnPage() {
             )}
           </div>
         </aside>
+
+        {/* Background Library Modal (root-level) */}
+      {showBackgroundLibrary && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-lg z-[9999] flex items-center justify-center p-8">
+          <div className="bg-white rounded-2xl shadow-2xl w-[80vw] h-[80vh] overflow-hidden relative">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <h3 className="font-[var(--font-serif)] text-xl text-neutral-800">Choose a background</h3>
+              <div className="flex items-center gap-3">
+                <select
+                  value={backgroundCountry}
+                  onChange={(e) => setBackgroundCountry(e.target.value)}
+                  className="h-9 px-3 rounded-full border bg-white text-sm font-[var(--font-sans)]"
+                >
+                  <option value="All">All countries</option>
+                  {Object.keys(backgroundsByCountry).map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <button 
+                  onClick={() => setShowBackgroundLibrary(false)}
+                  className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center hover:bg-neutral-200 transition-colors"
+                >
+                  <span className="text-neutral-600">×</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="h-[calc(80vh-73px)] overflow-y-auto p-6 space-y-8">
+              {(backgroundCountry === "All" ? Object.keys(backgroundsByCountry) : [backgroundCountry]).map((country) => (
+                <div key={country}>
+                  <h4 className="font-[var(--font-sans)] text-sm font-medium text-neutral-600 mb-3 uppercase tracking-wider">{country}</h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    {backgroundsByCountry[country].map((src) => (
+                      <button
+                        key={src}
+                        className={`relative aspect-[4/3] rounded-md overflow-hidden border-2 transition-all duration-200 hover:shadow-lg cursor-pointer ${
+                          bgChoice === src ? "border-[color:var(--accent)] ring-2 ring-[color:var(--accent)]/20" : "border-neutral-200 hover:border-neutral-300"
+                        }`}
+                        onClick={() => {
+                          setBgChoice(src)
+                          setShowBackgroundLibrary(false)
+                        }}
+                      >
+                        <Image src={src} alt={`${country} background`} fill className="object-cover" />
+                        {bgChoice === src && (
+                          <div className="absolute inset-0 bg-[color:var(--accent)]/10 flex items-center justify-center">
+                            <div className="w-6 h-6 rounded-full bg-[color:var(--accent)] flex items-center justify-center">
+                              <span className="text-white text-xs">✓</span>
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </main>
   )
