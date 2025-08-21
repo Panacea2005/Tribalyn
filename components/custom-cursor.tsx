@@ -85,7 +85,7 @@ export function CustomCursor() {
           }
         }
       `}</style>
-      <div className="hidden md:block pointer-events-none fixed inset-0 z-[100]">
+      <div className="hidden md:block pointer-events-none fixed inset-0 z-[99999]">
         <div
           ref={ringRef}
           className="absolute rounded-full border"

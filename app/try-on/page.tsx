@@ -5,7 +5,7 @@ import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Camera, ImageDown, MonitorUp, FlipHorizontal2, Grid, Eye, EyeOff, RefreshCw, RotateCw, MoveHorizontal, MoveVertical, ZoomIn, User } from "lucide-react"
+import { Camera, Download, ImageDown, MonitorUp, FlipHorizontal2, Grid, Eye, EyeOff, RefreshCw, RotateCw, MoveHorizontal, MoveVertical, ZoomIn, User } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { generateTryOn } from "@/lib/api"
 import { CustomCursor } from "@/components/custom-cursor"
@@ -55,10 +55,19 @@ const countryOutfits: Record<string, string[]> = {
   ],
 }
 
-const samples = [
+const maleSamples = [
   "/try-on/samples/1.jpg",
   "/try-on/samples/2.jpg",
   "/try-on/samples/3.jpg",
+  "/try-on/samples/4.jpg",
+]
+
+const femaleSamples = [
+  "/try-on/samples/5.jpg",
+  "/try-on/samples/6.jpg",
+  "/try-on/samples/7.jpg",
+  "/try-on/samples/8.jpg",
+  "/try-on/samples/9.jpg",
 ]
 
 export default function TryOnPage() {
@@ -81,7 +90,7 @@ export default function TryOnPage() {
   const stageRef = useRef<HTMLDivElement>(null)
   const [originalStillUrl, setOriginalStillUrl] = useState<string | null>(null)
   // Transform controls
-  const [scalePct, setScalePct] = useState(70)
+  const [scalePct, setScalePct] = useState(20)
   const [rotateDeg, setRotateDeg] = useState(0)
   const [moveX, setMoveX] = useState(50)
   const [moveY, setMoveY] = useState(50)
@@ -96,6 +105,7 @@ export default function TryOnPage() {
   const [uploadedBg, setUploadedBg] = useState<File | null>(null)
   const [avatarPrompt, setAvatarPrompt] = useState("")
   const [backgroundPrompt, setBackgroundPrompt] = useState("")
+  const [showSampleLibrary, setShowSampleLibrary] = useState(false)
 
   // Single selected clothing outfit
   const [selectedClothing, setSelectedClothing] = useState<
@@ -118,23 +128,45 @@ export default function TryOnPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const beforeVideoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const [preferredCamId, setPreferredCamId] = useState<string | null>(null)
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
+
+  async function listVideoDevices(): Promise<MediaDeviceInfo[]> {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      return devices.filter((d) => d.kind === "videoinput")
+    } catch {
+      return []
+    }
+  }
+
+  async function findCamoDeviceId(): Promise<string | null> {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const cam = devices.find(
+        (d) => d.kind === "videoinput" && (/camo/i.test(d.label) || /reincubate/i.test(d.label) || /iphone/i.test(d.label))
+      )
+      return cam?.deviceId ?? null
+    } catch {
+      return null
+    }
+  }
 
   useEffect(() => {
     let active = true
-    async function initCam() {
+    async function startStreamForDevice(deviceId: string | null) {
       try {
-        if (mode !== "selfie") {
-          stopCam()
-          return
-        }
-        const s = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        })
+        const constraints: MediaStreamConstraints = deviceId
+          ? { video: { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }
+          : { video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }
+
+        const s = await navigator.mediaDevices.getUserMedia(constraints)
         if (!active) {
           s.getTracks().forEach((t) => t.stop())
           return
         }
+        // Stop old stream if any
+        if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop())
         streamRef.current = s
         if (videoRef.current) {
           videoRef.current.srcObject = s
@@ -155,12 +187,44 @@ export default function TryOnPage() {
       }
       if (videoRef.current) videoRef.current.srcObject = null
     }
+    async function initCam() {
+      if (mode !== "selfie") {
+        stopCam()
+        return
+      }
+      // First start any stream to unlock labels, then prefer Camo
+      await startStreamForDevice(preferredCamId)
+      const list = await listVideoDevices()
+      if (active) setVideoDevices(list)
+      if (!preferredCamId) {
+        const camoId = await findCamoDeviceId()
+        if (camoId && active) {
+          setPreferredCamId(camoId)
+          await startStreamForDevice(camoId)
+        }
+      }
+    }
     initCam()
     return () => {
       active = false
       stopCam()
     }
-  }, [mode])
+  }, [mode, preferredCamId])
+
+  useEffect(() => {
+    function handleDeviceChange() {
+      // Refresh device list when cameras are added/removed
+      listVideoDevices().then(setVideoDevices).catch(() => {})
+    }
+    if (navigator.mediaDevices && "ondevicechange" in navigator.mediaDevices) {
+      navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange)
+    }
+    return () => {
+      if (navigator.mediaDevices && "ondevicechange" in navigator.mediaDevices) {
+        navigator.mediaDevices.removeEventListener("devicechange", handleDeviceChange)
+      }
+    }
+  }, [])
 
   const displayImage = uploaded || null
   const afterImage = resultB64 ? `data:image/png;base64,${resultB64}` : null
@@ -382,9 +446,7 @@ export default function TryOnPage() {
           <div ref={stageRef} className="absolute inset-0 overflow-hidden select-none">
             {/* Before (compare) layer */}
             {viewMode === "compare" && afterImage && (
-              <div
-                className="absolute inset-0 z-20 pointer-events-none"
-              >
+              <div className="absolute inset-0 z-20">
                 <div
                   className="absolute inset-0"
                   style={{
@@ -407,53 +469,53 @@ export default function TryOnPage() {
                   <div className="absolute inset-0" style={{ clipPath: `inset(0 0 0 ${comparePct}%)` }}>
                     <Image src={afterImage} alt="Result" fill className="object-contain" />
                   </div>
-                </div>
-                {/* Divider and handle */}
-                <div
-                  className="absolute top-0 bottom-0 w-[2px] bg-white/95 shadow-[0_0_0_1px_rgba(0,0,0,0.2)] pointer-events-none"
-                  style={{ left: `${comparePct}%`, transform: "translateX(-1px)" }}
-                />
-                <div
-                  role="slider"
-                  aria-label="Drag to compare"
-                  className="absolute top-1/2 -translate-y-1/2 -ml-4 h-10 w-10 rounded-full border bg-white shadow grid place-items-center cursor-ew-resize pointer-events-auto"
-                  style={{ left: `${comparePct}%` }}
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    const start = stageRef.current
-                    if (!start) return
-                    const onMove = (ev: MouseEvent) => {
-                      const rect = start.getBoundingClientRect()
-                      const pct = Math.min(100, Math.max(0, ((ev.clientX - rect.left) / rect.width) * 100))
-                      setComparePct(pct)
-                    }
-                    const onUp = () => {
-                      window.removeEventListener("mousemove", onMove)
-                      window.removeEventListener("mouseup", onUp)
-                    }
-                    window.addEventListener("mousemove", onMove)
-                    window.addEventListener("mouseup", onUp)
-                  }}
-                  onTouchStart={(e) => {
-                    const start = stageRef.current
-                    if (!start) return
-                    const onMove = (ev: TouchEvent) => {
-                      const rect = start.getBoundingClientRect()
-                      const x = ev.touches[0]?.clientX ?? 0
-                      const pct = Math.min(100, Math.max(0, ((x - rect.left) / rect.width) * 100))
-                      setComparePct(pct)
-                    }
-                    const onEnd = () => {
-                      window.removeEventListener("touchmove", onMove)
-                      window.removeEventListener("touchend", onEnd)
-                      window.removeEventListener("touchcancel", onEnd)
-                    }
-                    window.addEventListener("touchmove", onMove)
-                    window.addEventListener("touchend", onEnd)
-                    window.addEventListener("touchcancel", onEnd)
-                  }}
-                >
-                  <span className="h-3 w-3 rounded-full bg-[color:var(--accent)]" />
+                  {/* Divider and handle inside the same transformed plane */}
+                  <div
+                    className="absolute top-0 bottom-0 w-[2px] bg-white/95 shadow-[0_0_0_1px_rgba(0,0,0,0.2)]"
+                    style={{ left: `${comparePct}%`, transform: "translateX(-1px)" }}
+                  />
+                  <div
+                    role="slider"
+                    aria-label="Drag to compare"
+                    className="absolute top-1/2 -translate-y-1/2 -ml-4 h-10 w-10 rounded-full border bg-white shadow grid place-items-center cursor-ew-resize"
+                    style={{ left: `${comparePct}%` }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      const start = stageRef.current
+                      if (!start) return
+                      const onMove = (ev: MouseEvent) => {
+                        const rect = start.getBoundingClientRect()
+                        const pct = Math.min(100, Math.max(0, ((ev.clientX - rect.left) / rect.width) * 100))
+                        setComparePct(pct)
+                      }
+                      const onUp = () => {
+                        window.removeEventListener("mousemove", onMove)
+                        window.removeEventListener("mouseup", onUp)
+                      }
+                      window.addEventListener("mousemove", onMove)
+                      window.addEventListener("mouseup", onUp)
+                    }}
+                    onTouchStart={(e) => {
+                      const start = stageRef.current
+                      if (!start) return
+                      const onMove = (ev: TouchEvent) => {
+                        const rect = start.getBoundingClientRect()
+                        const x = ev.touches[0]?.clientX ?? 0
+                        const pct = Math.min(100, Math.max(0, ((x - rect.left) / rect.width) * 100))
+                        setComparePct(pct)
+                      }
+                      const onEnd = () => {
+                        window.removeEventListener("touchmove", onMove)
+                        window.removeEventListener("touchend", onEnd)
+                        window.removeEventListener("touchcancel", onEnd)
+                      }
+                      window.addEventListener("touchmove", onMove)
+                      window.addEventListener("touchend", onEnd)
+                      window.addEventListener("touchcancel", onEnd)
+                    }}
+                  >
+                    <span className="h-3 w-3 rounded-full bg-[color:var(--accent)]" />
+                  </div>
                 </div>
               </div>
             )}
@@ -534,64 +596,181 @@ export default function TryOnPage() {
               </ModeButton>
             </div>
 
+            {/* Camera device picker (for Camo/iPhone) */}
+            {mode === "selfie" && (
+              <div className="absolute right-3 top-14 z-30">
+                <select
+                  value={preferredCamId ?? ""}
+                  onChange={(e) => setPreferredCamId(e.target.value || null)}
+                  className="h-9 px-3 rounded-full border bg-white/90 backdrop-blur text-sm font-[var(--font-sans)]"
+                >
+                  <option value="">Default camera</option>
+                  {videoDevices.map((d, idx) => (
+                    <option key={d.deviceId || idx} value={d.deviceId}>
+                      {d.label || `Camera ${idx + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Upload and Samples (centered) */}
             {mode === "selfie" && (
-              <button
-                onClick={async () => {
-                  try {
-                    const file = await captureSelfieToFile()
-                    const url = URL.createObjectURL(file)
-                    setUploaded(url)
-                    setOriginalStillUrl(url)
-                    setMode("upload")
-                  } catch {}
-                }}
-                className="absolute left-1/2 bottom-4 -translate-x-1/2 h-10 px-4 rounded-full border bg-white/90 backdrop-blur text-sm font-[var(--font-sans)] z-30"
-              >
-                Capture Selfie
-              </button>
-            )}
-            {mode === "upload" && (
-              <label className="absolute left-1/2 bottom-20 -translate-x-1/2 inline-flex items-center gap-2 rounded-full border px-4 py-2 bg-white/90 backdrop-blur shadow-sm z-30 cursor-pointer">
-                <MonitorUp className="w-4 h-4" />
-                <span className="font-[var(--font-sans)] text-sm">Choose image…</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (!f) return
-                    const url = URL.createObjectURL(f)
-                    setUploaded(url)
-                    setMode("upload")
-                  }}
-                />
-              </label>
-            )}
-            {mode === "upload" && (
-              <div className="absolute left-1/2 bottom-4 -translate-x-1/2 flex gap-2 bg-white/90 backdrop-blur p-2 rounded-full shadow-sm z-30">
-                {samples.map((s) => (
-                  <button
-                    key={s}
-                    className={`w-12 h-12 rounded-lg overflow-hidden border ${
-                      uploaded === s ? "ring-2 ring-[color:var(--accent)]" : ""
-                    }`}
-                    onClick={() => {
-                      setUploaded(s)
+              <div className="absolute left-1/2 bottom-6 -translate-x-1/2 z-30 flex items-center gap-2 bg-white/95 backdrop-blur-sm rounded-full px-3 py-2 shadow-lg border">
+                <button
+                  onClick={async () => {
+                    try {
+                      const file = await captureSelfieToFile()
+                      const url = URL.createObjectURL(file)
+                      setUploaded(url)
+                      setOriginalStillUrl(url)
                       setMode("upload")
-                    }}
-                  >
-                    <Image
-                      src={s || "/logo.png"}
-                      alt="Sample"
-                      width={160}
-                      height={160}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
+                    } catch {}
+                  }}
+                  className="inline-flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-[var(--font-sans)] hover:bg-black/5 transition-colors"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>Capture</span>
+                </button>
               </div>
+            )}
+            {/* Upload/Sample controls - redesigned */}
+            {mode === "upload" && (
+              <>
+                {/* Upload, samples, and renew buttons - bottom bar */}
+                <div className="absolute left-1/2 bottom-8 -translate-x-1/2 flex items-center gap-2 z-30 bg-white/95 backdrop-blur-sm rounded-full px-3 py-2 shadow-lg border">
+                  <label className="inline-flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-[var(--font-sans)] cursor-pointer hover:bg-black/5 transition-colors">
+                    <MonitorUp className="w-4 h-4" />
+                    <span>Upload</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        if (!f) return
+                        const url = URL.createObjectURL(f)
+                        setUploaded(url)
+                        setMode("upload")
+                      }}
+                    />
+                  </label>
+                  
+                  <button 
+                    onClick={() => setShowSampleLibrary(true)}
+                    className="inline-flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-[var(--font-sans)] hover:bg-black/5 transition-colors"
+                  >
+                    <User className="w-4 h-4" />
+                    <span>Samples</span>
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      setUploaded(null)
+                      setResultB64(null)
+                      setViewMode("original")
+                      setSelectedClothing(null)
+                      setBgChoice(null)
+                      setUploadedBg(null)
+                      setAvatarPrompt("")
+                      setBackgroundPrompt("")
+                    }}
+                    className="inline-flex items-center gap-2 h-9 px-3 rounded-full border text-sm font-[var(--font-sans)] hover:bg-black/5 transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Renew</span>
+                  </button>
+                </div>
+
+                {/* Sample Library Modal */}
+                {showSampleLibrary && (
+                  <div className="fixed inset-0 bg-black/40 backdrop-blur-lg z-[9999] flex items-center justify-center p-8" style={{ zIndex: 9999 }}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-[80vw] h-[80vh] overflow-hidden relative" style={{ zIndex: 10000 }}>
+                      {/* Header */}
+                      <div className="flex items-center justify-between p-6 border-b">
+                        <h3 className="font-[var(--font-serif)] text-xl text-neutral-800">Choose a sample photo</h3>
+                        <button 
+                          onClick={() => setShowSampleLibrary(false)}
+                          className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center hover:bg-neutral-200 transition-colors"
+                        >
+                          <span className="text-neutral-600">×</span>
+                        </button>
+                      </div>
+                      
+                      {/* Content - Split Layout */}
+                      <div className="flex h-full">
+                        {/* Left Side - Male Models */}
+                        <div className="w-1/2 p-6 border-r border-neutral-200" style={{ zIndex: 10001, position: 'relative' }}>
+                          <h4 className="font-[var(--font-sans)] text-sm font-medium text-neutral-600 mb-4 uppercase tracking-wider">Male Models</h4>
+                          <div className="grid grid-cols-3 gap-2">
+                            {maleSamples.map((sample) => (
+                              <button
+                                key={sample}
+                                className={`relative aspect-square rounded-md overflow-hidden border-2 transition-all duration-200 hover:shadow-lg cursor-pointer ${
+                                  uploaded === sample ? "border-[color:var(--accent)] ring-2 ring-[color:var(--accent)]/20" : "border-neutral-200 hover:border-neutral-300"
+                                }`}
+                                style={{ zIndex: 10002, position: 'relative' }}
+                                onClick={() => {
+                                  setUploaded(sample)
+                                  setShowSampleLibrary(false)
+                                }}
+                              >
+                                <Image
+                                  src={sample}
+                                  alt="Male sample"
+                                  fill
+                                  className="object-cover"
+                                />
+                                {uploaded === sample && (
+                                  <div className="absolute inset-0 bg-[color:var(--accent)]/10 flex items-center justify-center">
+                                    <div className="w-6 h-6 rounded-full bg-[color:var(--accent)] flex items-center justify-center">
+                                      <span className="text-white text-xs">✓</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* Right Side - Female Models */}
+                        <div className="w-1/2 p-6" style={{ zIndex: 10001, position: 'relative' }}>
+                          <h4 className="font-[var(--font-sans)] text-sm font-medium text-neutral-600 mb-4 uppercase tracking-wider">Female Models</h4>
+                          <div className="grid grid-cols-3 gap-2">
+                            {femaleSamples.map((sample) => (
+                              <button
+                                key={sample}
+                                className={`relative aspect-square rounded-md overflow-hidden border-2 transition-all duration-200 hover:shadow-lg cursor-pointer ${
+                                  uploaded === sample ? "border-[color:var(--accent)] ring-2 ring-[color:var(--accent)]/20" : "border-neutral-200 hover:border-neutral-300"
+                                }`}
+                                style={{ zIndex: 10002, position: 'relative' }}
+                                onClick={() => {
+                                  setUploaded(sample)
+                                  setShowSampleLibrary(false)
+                                }}
+                              >
+                                <Image
+                                  src={sample}
+                                  alt="Female sample"
+                                  fill
+                                  className="object-cover"
+                                />
+                                {uploaded === sample && (
+                                  <div className="absolute inset-0 bg-[color:var(--accent)]/10 flex items-center justify-center">
+                                    <div className="w-6 h-6 rounded-full bg-[color:var(--accent)] flex items-center justify-center">
+                                      <span className="text-white text-xs">✓</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Compare overlay toggle */}
@@ -683,7 +862,7 @@ export default function TryOnPage() {
             <SliderLabeled id="vibrance" label="Vibrance" value={vibrance} onChange={setVibrance} />
           </Section>
 
-          <div className="mt-6 border-t pt-4">
+          <div className="mt-6 border-t pt-4 space-y-3">
             <button
               onClick={async () => {
                 if (!selectedClothing) return
@@ -725,8 +904,25 @@ export default function TryOnPage() {
               disabled={isGenerating || !selectedClothing || !hasAvatar}
             >
               {isGenerating ? "Generating…" : "Generate Try‑On"}
-                </button>
-            </div>
+            </button>
+            
+            {afterImage && (
+              <button
+                onClick={() => {
+                  const link = document.createElement('a')
+                  link.href = afterImage
+                  link.download = `tribalyn-tryon-${Date.now()}.png`
+                  document.body.appendChild(link)
+                  link.click()
+                  document.body.removeChild(link)
+                }}
+                className="w-full h-11 rounded-full border bg-white text-neutral-700 font-[var(--font-sans)] hover:bg-neutral-50 transition-colors inline-flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Save Result
+              </button>
+            )}
+          </div>
         </aside>
       </div>
     </main>
